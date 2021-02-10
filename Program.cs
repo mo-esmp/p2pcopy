@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using UdtSharp;
 
@@ -12,6 +14,7 @@ namespace p2pcopy
     internal class Program
     {
         private static readonly List<Socket> Sockets = new List<Socket>();
+        private static readonly List<int> Seconds = new List<int> { 10, 20, 30, 40, 50, 60 };
 
         static async Task Main(string[] args)
         {
@@ -51,7 +54,6 @@ namespace p2pcopy
                 await InitializeSocketsAsync();
 
                 Console.WriteLine();
-                Console.WriteLine();
 
                 Console.Write("Enter the ip of your peer: ");
                 var remoteIp = Console.ReadLine();
@@ -73,7 +75,7 @@ namespace p2pcopy
 
                 var remotePorts = ParseRemotePort(peerPorts);
 
-                UdtSocket connection = null; //await PeerConnectAsync(socket, remoteIp, remotePort);
+                UdtSocket connection = await PeerConnectAsync(remoteIp, remotePorts);
 
                 if (connection == null)
                 {
@@ -180,7 +182,7 @@ namespace p2pcopy
             internal IPEndPoint Internal;
         }
 
-        static async Task<P2pEndPoint> GetExternalEndPointAsync(Socket socket)
+        static async Task<P2pEndPoint> GetExternalEndPointAsync(Socket socket, bool printMessages = true)
         {
             // https://gist.github.com/zziuni/3741933
 
@@ -452,7 +454,9 @@ namespace p2pcopy
             stunServers.Add(new Tuple<string, int>("stun4.l.google.com", 19302));
             stunServers.Add(new Tuple<string, int>("stunserver.org", 3478));
 
-            Console.WriteLine("Contacting STUN servers to obtain your IP");
+            if (printMessages)
+                Console.WriteLine("Contacting STUN servers to obtain your IP");
+
             foreach (Tuple<string, int> server in stunServers)
             {
                 string host = server.Item1;
@@ -465,7 +469,8 @@ namespace p2pcopy
                     continue;
                 }
 
-                Console.WriteLine("Your firewall is {0}", externalEndPoint.NetType.ToString());
+                if (printMessages)
+                    Console.WriteLine("Your firewall is {0}", externalEndPoint.NetType.ToString());
 
                 return new P2pEndPoint()
                 {
@@ -474,64 +479,82 @@ namespace p2pcopy
                 };
             }
 
-            Console.WriteLine("Could not find a working STUN server");
+            if (printMessages)
+                Console.WriteLine("Could not find a working STUN server");
+
             return null;
         }
 
         static int SleepTime(DateTime now)
         {
-            List<int> seconds = new List<int>() { 10, 20, 30, 40, 50, 60 };
-
-            int next = seconds.Find(x => x > now.Second);
+            int next = Seconds.Find(x => x > now.Second);
 
             return next - now.Second;
         }
 
-        static async Task<UdtSocket> PeerConnectAsync(Socket socket, string remoteAddr, int remotePort)
+        static async Task<UdtSocket> PeerConnectAsync(string remoteAddress, int[] remotePorts)
         {
-            bool bConnected = false;
-            int retry = 0;
+            if (!Sockets.Any())
+                return null;
 
-            UdtSocket client = null;
+            Console.WriteLine("Trying to connect to peer on different ports");
 
-            while (!bConnected)
+            UdtSocket udtSocket;
+            CancellationTokenSource cts;
+            var retry = 1;
+
+            do
             {
-                try
+                Console.WriteLine($"Try {retry++}:");
+                Console.WriteLine();
+
+                cts = new CancellationTokenSource();
+                var taskList = remotePorts .Select((port, index) => ConnectAsync(Sockets[index], remoteAddress, port, cts.Token)).ToList();
+
+                var now = InternetTime.Get();
+                var sleepTimeToSync = SleepTime(now);
+
+                Console.WriteLine("[{0}] - Waiting {1} sec to sync with other peer", now.ToLongTimeString(), sleepTimeToSync);
+
+                await Task.Delay(TimeSpan.FromSeconds(sleepTimeToSync), cts.Token);
+
+                Console.WriteLine("Connecting to other peer, please wait... ");
+                udtSocket = await (await Task.WhenAny(taskList));
+            } while (udtSocket == null);
+
+            cts.Cancel();
+
+            return udtSocket;
+        }
+
+        static async Task<UdtSocket> ConnectAsync(Socket socket, string remoteAddress, int remotePort, CancellationToken ct)
+        {
+            try
+            {
+                await GetExternalEndPointAsync(socket);
+
+                var client = new UdtSocket(socket.AddressFamily, socket.SocketType);
+                client.Bind(socket);
+
+                Console.WriteLine("Trying to connect to {0}:{1}.  ", remoteAddress, remotePort);
+
+                client.Connect(new IPEndPoint(IPAddress.Parse(remoteAddress), remotePort));
+
+                Console.WriteLine("Connected successfully to {0}:{1}", remoteAddress, remotePort);
+
+                if (ct.IsCancellationRequested)
                 {
-                    DateTime now = InternetTime.Get();
-
-                    int sleepTimeToSync = SleepTime(now);
-
-                    Console.WriteLine("[{0}] - Waiting {1} sec to sync with other peer",
-                        now.ToLongTimeString(),
-                        sleepTimeToSync);
-                    System.Threading.Thread.Sleep(sleepTimeToSync * 1000);
-
-                    await GetExternalEndPointAsync(socket);
-
-                    if (client != null)
-                        client.Close();
-
-                    client = new UdtSocket(socket.AddressFamily, socket.SocketType);
-                    client.Bind(socket);
-
-                    Console.Write("\r{0} - Trying to connect to {1}:{2}.  ",
-                        retry++, remoteAddr, remotePort);
-
-                    client.Connect(new IPEndPoint(IPAddress.Parse(remoteAddr), remotePort));
-
-                    Console.WriteLine("Connected successfully to {0}:{1}",
-                        remoteAddr, remotePort);
-
-                    bConnected = true;
+                    socket.Close();
+                    ct.ThrowIfCancellationRequested();
                 }
-                catch (Exception e)
-                {
-                    Console.Write(e.Message.Replace(Environment.NewLine, ". "));
-                }
+
+                return client;
             }
-
-            return client;
+            catch (Exception e)
+            {
+                Console.WriteLine($"{e.Message.Replace(Environment.NewLine, ". ")} - Port:{remotePort}");
+                return null;
+            }
         }
 
         static async Task InitializeSocketsAsync()
@@ -547,6 +570,7 @@ namespace p2pcopy
                 return;
             }
 
+            Console.WriteLine();
             Console.WriteLine("Tell your peer your IP is: {0}", p2pEndPoint.External.Address);
             Console.WriteLine("Initializing sockets...");
 
@@ -557,7 +581,7 @@ namespace p2pcopy
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
 
-                p2pEndPoint = await GetExternalEndPointAsync(socket);
+                p2pEndPoint = await GetExternalEndPointAsync(socket, false);
                 if (p2pEndPoint == null)
                 {
                     socket.Close();
