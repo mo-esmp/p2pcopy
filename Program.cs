@@ -37,13 +37,6 @@ namespace p2pcopy
                 return;
             }
 
-            string remoteIp;
-            int remotePort;
-
-            Socket socket = new Socket(
-                AddressFamily.InterNetwork,
-                SocketType.Dgram, ProtocolType.Udp);
-
             try
             {
                 if (cla.LocalPort != -1)
@@ -55,33 +48,32 @@ namespace p2pcopy
                     cla.LocalPort = 0;
                 }
 
-                socket.Bind(new IPEndPoint(IPAddress.Any, cla.LocalPort));
-
-                P2pEndPoint p2pEndPoint = await GetExternalEndPointAsync(socket);
-
-                if (p2pEndPoint == null)
-                    return;
-
-                Console.WriteLine("Tell this to your peer: {0}", p2pEndPoint.External.ToString());
+                await InitializeSocketsAsync();
 
                 Console.WriteLine();
                 Console.WriteLine();
 
-                Console.Write("Enter the ip:port of your peer: ");
-                string peer = Console.ReadLine();
+                Console.Write("Enter the ip of your peer: ");
+                var remoteIp = Console.ReadLine();
 
-                if (string.IsNullOrEmpty(peer))
+                if (string.IsNullOrEmpty(remoteIp))
                 {
-                    Console.WriteLine("Invalid ip:port entered");
+                    Console.WriteLine("Invalid ip entered");
                     return;
                 }
 
-                // try again to connect to external to "reopen" port
-                await GetExternalEndPointAsync(socket);
+                Console.Write("Enter the ports of your peer (comma separate): ");
+                var peerPorts = Console.ReadLine();
 
-                ParseRemoteAddr(peer, out remoteIp, out remotePort);
+                if (string.IsNullOrEmpty(peerPorts))
+                {
+                    Console.WriteLine("Invalid ports entered");
+                    return;
+                }
 
-                UdtSocket connection = await PeerConnectAsync(socket, remoteIp, remotePort);
+                var remotePorts = ParseRemotePort(peerPorts);
+
+                UdtSocket connection = null; //await PeerConnectAsync(socket, remoteIp, remotePort);
 
                 if (connection == null)
                 {
@@ -107,7 +99,7 @@ namespace p2pcopy
             }
             finally
             {
-                socket.Close();
+                //socket.Close();
             }
         }
 
@@ -171,12 +163,15 @@ namespace p2pcopy
             }
         }
 
-        static void ParseRemoteAddr(string addr, out string remoteIp, out int port)
+        static int[] ParseRemotePort(string portsStr)
         {
-            string[] split = addr.Split(':');
+            var split = portsStr.Split(',');
+            var ports = new int[split.Length];
 
-            remoteIp = split[0];
-            port = int.Parse(split[1]);
+            for (var i = 0; i < split.Length; i++)
+                ports[i] = int.Parse(split[i]);
+
+            return ports;
         }
 
         class P2pEndPoint
@@ -539,7 +534,7 @@ namespace p2pcopy
             return client;
         }
 
-        static async Task InitializeSockets()
+        static async Task InitializeSocketsAsync()
         {
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Bind(new IPEndPoint(IPAddress.Any, 0));
