@@ -1,15 +1,16 @@
-using System.IO;
-﻿using System;
-using System.Net.Sockets;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
+using System.Net.Sockets;
+using System.Threading.Tasks;
 using UdtSharp;
 
 namespace p2pcopy
 {
-    class Program
+    internal class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             CommandLineArguments cla = CommandLineArguments.Parse(args);
 
@@ -42,7 +43,6 @@ namespace p2pcopy
 
             try
             {
-
                 if (cla.LocalPort != -1)
                 {
                     Console.WriteLine("Using local port: {0}", cla.LocalPort);
@@ -108,7 +108,7 @@ namespace p2pcopy
             }
         }
 
-        class CommandLineArguments
+        private class CommandLineArguments
         {
             internal bool Sender = false;
 
@@ -135,20 +135,25 @@ namespace p2pcopy
                         case "sender":
                             result.Sender = true;
                             break;
+
                         case "receiver":
                             result.Receiver = true;
                             break;
+
                         case "--verbose":
                             result.Verbose = true;
                             break;
+
                         case "--file":
                             if (args.Length == i) return null;
                             result.File = args[i++];
                             break;
+
                         case "--localport":
                             if (args.Length == i) return null;
                             result.LocalPort = int.Parse(args[i++]);
                             break;
+
                         case "help":
                             return null;
                     }
@@ -475,10 +480,9 @@ namespace p2pcopy
             return null;
         }
 
-
         static int SleepTime(DateTime now)
         {
-            List<int> seconds = new List<int>() {10, 20, 30, 40, 50, 60};
+            List<int> seconds = new List<int>() { 10, 20, 30, 40, 50, 60 };
 
             int next = seconds.Find(x => x > now.Second);
 
