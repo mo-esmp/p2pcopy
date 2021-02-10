@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 using UdtSharp;
 
@@ -10,6 +11,8 @@ namespace p2pcopy
 {
     internal class Program
     {
+        private static readonly List<Socket> Sockets = new List<Socket>();
+
         static async Task Main(string[] args)
         {
             CommandLineArguments cla = CommandLineArguments.Parse(args);
@@ -534,6 +537,50 @@ namespace p2pcopy
             }
 
             return client;
+        }
+
+        static async Task InitializeSockets()
+        {
+            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+
+            // Connecting to external to obtain IP and get firewall type
+            var p2pEndPoint = await GetExternalEndPointAsync(socket);
+            if (p2pEndPoint == null)
+            {
+                socket.Close();
+                return;
+            }
+
+            Console.WriteLine("Tell your peer your IP is: {0}", p2pEndPoint.External.Address);
+            Console.WriteLine("Initializing sockets...");
+
+            var ports = new StringBuilder();
+
+            for (var i = 0; i < 10; i++)
+            {
+                socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+
+                p2pEndPoint = await GetExternalEndPointAsync(socket);
+                if (p2pEndPoint == null)
+                {
+                    socket.Close();
+                    continue;
+                }
+
+                ports.Append(p2pEndPoint.External.Port);
+                ports.Append(",");
+
+                Sockets.Add(socket);
+            }
+
+            if (ports.Length <= 0)
+                return;
+
+            ports.Remove(ports.Length - 1, 1);
+            
+            Console.WriteLine("Tell your peer your ports are: {0}", ports);
         }
     }
 }
