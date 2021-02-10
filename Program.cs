@@ -54,7 +54,7 @@ namespace p2pcopy
 
                 socket.Bind(new IPEndPoint(IPAddress.Any, cla.LocalPort));
 
-                P2pEndPoint p2pEndPoint = GetExternalEndPoint(socket);
+                P2pEndPoint p2pEndPoint = await GetExternalEndPointAsync(socket);
 
                 if (p2pEndPoint == null)
                     return;
@@ -74,11 +74,11 @@ namespace p2pcopy
                 }
 
                 // try again to connect to external to "reopen" port
-                GetExternalEndPoint(socket);
+                await GetExternalEndPointAsync(socket);
 
                 ParseRemoteAddr(peer, out remoteIp, out remotePort);
 
-                UdtSocket connection = PeerConnect(socket, remoteIp, remotePort);
+                UdtSocket connection = await PeerConnectAsync(socket, remoteIp, remotePort);
 
                 if (connection == null)
                 {
@@ -182,7 +182,7 @@ namespace p2pcopy
             internal IPEndPoint Internal;
         }
 
-        static P2pEndPoint GetExternalEndPoint(Socket socket)
+        static async Task<P2pEndPoint> GetExternalEndPointAsync(Socket socket)
         {
             // https://gist.github.com/zziuni/3741933
 
@@ -460,7 +460,7 @@ namespace p2pcopy
                 string host = server.Item1;
                 int port = server.Item2;
 
-                StunResult externalEndPoint = StunClient.Query(host, port, socket);
+                StunResult externalEndPoint = await StunClient.QueryAsync(host, port, socket);
 
                 if (externalEndPoint.NetType == StunNetType.UdpBlocked)
                 {
@@ -489,7 +489,7 @@ namespace p2pcopy
             return next - now.Second;
         }
 
-        static UdtSocket PeerConnect(Socket socket, string remoteAddr, int remotePort)
+        static async Task<UdtSocket> PeerConnectAsync(Socket socket, string remoteAddr, int remotePort)
         {
             bool bConnected = false;
             int retry = 0;
@@ -509,7 +509,7 @@ namespace p2pcopy
                         sleepTimeToSync);
                     System.Threading.Thread.Sleep(sleepTimeToSync * 1000);
 
-                    GetExternalEndPoint(socket);
+                    await GetExternalEndPointAsync(socket);
 
                     if (client != null)
                         client.Close();

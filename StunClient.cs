@@ -2,6 +2,7 @@
 using System.Net.Sockets;
 using System.Net;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace p2pcopy
 {
@@ -825,7 +826,7 @@ namespace p2pcopy
         /// <param name="socket">UDP socket to use.</param>
         /// <returns>Returns UDP netwrok info.</returns>
         /// <exception cref="Exception">Throws exception if unexpected error happens.</exception>
-        internal static StunResult Query(string host, int port, Socket socket)
+        internal static async Task<StunResult> QueryAsync(string host, int port, Socket socket)
         {
             if (host == null)
             {
@@ -907,7 +908,7 @@ namespace p2pcopy
             // Test I
             StunMessage test1 = new StunMessage();
             test1.Type = StunMessageType.BindingRequest;
-            StunMessage test1response = DoTransaction(test1, socket, remoteEndPoint);
+            StunMessage test1response = await DoTransactionAsync(test1, socket, remoteEndPoint);
 
             // UDP blocked.
             if (test1response == null)
@@ -924,7 +925,7 @@ namespace p2pcopy
                 // No NAT.
                 if (socket.LocalEndPoint.Equals(test1response.MappedAddress))
                 {
-                    StunMessage test2Response = DoTransaction(test2, socket, remoteEndPoint);
+                    StunMessage test2Response = await DoTransactionAsync(test2, socket, remoteEndPoint);
                     // Open Internet.
                     if (test2Response != null)
                     {
@@ -939,7 +940,7 @@ namespace p2pcopy
                 // NAT
                 else
                 {
-                    StunMessage test2Response = DoTransaction(test2, socket, remoteEndPoint);
+                    StunMessage test2Response = await DoTransactionAsync(test2, socket, remoteEndPoint);
                     // Full cone NAT.
                     if (test2Response != null)
                     {
@@ -956,7 +957,7 @@ namespace p2pcopy
                         StunMessage test12 = new StunMessage();
                         test12.Type = StunMessageType.BindingRequest;
 
-                        StunMessage test12Response = DoTransaction(test12, socket, test1response.ChangedAddress);
+                        StunMessage test12Response = await DoTransactionAsync(test12, socket, test1response.ChangedAddress);
                         if (test12Response == null)
                         {
                             throw new Exception("STUN Test I(II) didn't get response!");
@@ -975,7 +976,7 @@ namespace p2pcopy
                                 test3.Type = StunMessageType.BindingRequest;
                                 test3.ChangeRequest = new StunChangeRequest(false, true);
 
-                                StunMessage test3Response = DoTransaction(test3, socket, test1response.ChangedAddress);
+                                StunMessage test3Response = await DoTransactionAsync(test3, socket, test1response.ChangedAddress);
                                 // Restricted
                                 if (test3Response != null)
                                 {
@@ -1004,16 +1005,17 @@ namespace p2pcopy
         /// <param name="socket">Socket to use for send/receive.</param>
         /// <param name="remoteEndPoint">Remote end point.</param>
         /// <returns>Returns transaction response or null if transaction failed.</returns>
-        static StunMessage DoTransaction(StunMessage request, Socket socket, IPEndPoint remoteEndPoint)
+        static async Task<StunMessage> DoTransactionAsync(StunMessage request, Socket socket, IPEndPoint remoteEndPoint)
         {
-            byte[] requestBytes = request.ToByteData();
+            var requestByteSegments = new ArraySegment<byte>(request.ToByteData());
             DateTime startTime = DateTime.Now;
+
             // We do it only 2 sec and retransmit with 100 ms.
             while (startTime.AddSeconds(2) > DateTime.Now)
             {
                 try
                 {
-                    socket.SendTo(requestBytes, remoteEndPoint);
+                    await socket.SendToAsync(requestByteSegments, SocketFlags.None, remoteEndPoint);
 
                     // We got response.
                     if (socket.Poll(100, SelectMode.SelectRead))
