@@ -101,7 +101,8 @@ namespace p2pcopy
             }
             finally
             {
-                //socket.Close();
+                foreach (var socket in Sockets)
+                    socket?.Close();
             }
         }
 
