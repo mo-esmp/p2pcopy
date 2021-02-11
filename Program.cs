@@ -13,9 +13,9 @@ namespace p2pcopy
 {
     class Program
     {
-        private static int _defaultTaskCount = 10;
-        private static readonly List<Socket> Sockets = new List<Socket>();
-        private static readonly List<int> Seconds = new List<int> { 10, 20, 30, 40, 50, 60 };
+        private static int defaultTaskCount = 10;
+        private static readonly List<Socket> sockets = new List<Socket>();
+        private static readonly List<int> seconds = new List<int> { 10, 20, 30, 40, 50, 60 };
 
         static async Task Main(string[] args)
         {
@@ -102,7 +102,7 @@ namespace p2pcopy
             }
             finally
             {
-                foreach (var socket in Sockets)
+                foreach (var socket in sockets)
                     socket?.Close();
             }
         }
@@ -486,14 +486,14 @@ namespace p2pcopy
 
         static int SleepTime(DateTime now)
         {
-            int next = Seconds.Find(x => x > now.Second);
+            int next = seconds.Find(x => x > now.Second);
 
             return next - now.Second;
         }
 
         static async Task<UdtSocket> PeerConnectAsync(string remoteAddress, int[] remotePorts)
         {
-            if (!Sockets.Any())
+            if (!sockets.Any())
                 return null;
 
             Console.WriteLine("Trying to connect to peer on different ports");
@@ -509,7 +509,7 @@ namespace p2pcopy
 
                 cts = new CancellationTokenSource();
 
-                var taskList = remotePorts.Select((port, index) => ConnectAsync(Sockets[index], remoteAddress, port, cts.Token)).ToList();
+                var taskList = remotePorts.Select((port, index) => ConnectAsync(sockets[index], remoteAddress, port, cts.Token)).ToList();
 
                 var now = InternetTime.Get();
                 var sleepTimeToSync = SleepTime(now);
@@ -577,7 +577,7 @@ namespace p2pcopy
 
             var ports = new StringBuilder();
 
-            for (var i = 0; i < _defaultTaskCount; i++)
+            for (var i = 0; i < defaultTaskCount; i++)
             {
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
@@ -592,7 +592,7 @@ namespace p2pcopy
                 ports.Append(p2pEndPoint.External.Port);
                 ports.Append(",");
 
-                Sockets.Add(socket);
+                sockets.Add(socket);
             }
 
             if (ports.Length <= 0)
