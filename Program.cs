@@ -52,7 +52,7 @@ namespace p2pcopy
                     cla.LocalPort = 0;
                 }
 
-                await InitializeSocketsAsync();
+                InitializeSockets();
 
                 Console.WriteLine();
 
@@ -184,7 +184,7 @@ namespace p2pcopy
             internal IPEndPoint Internal;
         }
 
-        static async Task<P2pEndPoint> GetExternalEndPointAsync(Socket socket, bool printMessages = true)
+        static P2pEndPoint GetExternalEndPoint(Socket socket, bool printMessages = true)
         {
             // https://gist.github.com/zziuni/3741933
 
@@ -464,7 +464,7 @@ namespace p2pcopy
                 string host = server.Item1;
                 int port = server.Item2;
 
-                StunResult externalEndPoint = await StunClient.QueryAsync(host, port, socket);
+                StunResult externalEndPoint = StunClient.Query(host, port, socket);
 
                 if (externalEndPoint.NetType == StunNetType.UdpBlocked)
                 {
@@ -511,7 +511,8 @@ namespace p2pcopy
                 Console.WriteLine();
 
                 cts = new CancellationTokenSource();
-                var taskList = remotePorts .Select((port, index) => ConnectAsync(Sockets[index], remoteAddress, port, cts.Token)).ToList();
+
+                var taskList = remotePorts.Select((port, index) => ConnectAsync(Sockets[index], remoteAddress, port, cts.Token)).ToList();
 
                 var now = InternetTime.Get();
                 var sleepTimeToSync = SleepTime(now);
@@ -531,41 +532,44 @@ namespace p2pcopy
 
         static async Task<UdtSocket> ConnectAsync(Socket socket, string remoteAddress, int remotePort, CancellationToken ct)
         {
-            try
+            return await Task.Run(() =>
             {
-                await GetExternalEndPointAsync(socket);
-
-                var client = new UdtSocket(socket.AddressFamily, socket.SocketType);
-                client.Bind(socket);
-
-                Console.WriteLine("Trying to connect to {0}:{1}.  ", remoteAddress, remotePort);
-
-                client.Connect(new IPEndPoint(IPAddress.Parse(remoteAddress), remotePort));
-
-                Console.WriteLine("Connected successfully to {0}:{1}", remoteAddress, remotePort);
-
-                if (ct.IsCancellationRequested)
+                try
                 {
-                    socket.Close();
-                    ct.ThrowIfCancellationRequested();
-                }
+                    GetExternalEndPoint(socket);
 
-                return client;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine($"{e.Message.Replace(Environment.NewLine, ". ")} - Port:{remotePort}");
-                return null;
-            }
+                    var client = new UdtSocket(socket.AddressFamily, socket.SocketType);
+                    client.Bind(socket);
+
+                    Console.WriteLine("Trying to connect to {0}:{1}.  ", remoteAddress, remotePort);
+
+                    client.Connect(new IPEndPoint(IPAddress.Parse(remoteAddress), remotePort));
+
+                    Console.WriteLine("Connected successfully to {0}:{1}", remoteAddress, remotePort);
+
+                    if (ct.IsCancellationRequested)
+                    {
+                        socket.Close();
+                        ct.ThrowIfCancellationRequested();
+                    }
+
+                    return client;
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine($"{e.Message.Replace(Environment.NewLine, ". ")} - Port:{remotePort}");
+                    return null;
+                }
+            }, ct);
         }
 
-        static async Task InitializeSocketsAsync()
+        static void InitializeSockets()
         {
             var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Bind(new IPEndPoint(IPAddress.Any, 0));
 
             // Connecting to external to obtain IP and get firewall type
-            var p2pEndPoint = await GetExternalEndPointAsync(socket);
+            var p2pEndPoint = GetExternalEndPoint(socket);
             if (p2pEndPoint == null)
             {
                 socket.Close();
@@ -583,7 +587,7 @@ namespace p2pcopy
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
 
-                p2pEndPoint = await GetExternalEndPointAsync(socket, false);
+                p2pEndPoint = GetExternalEndPoint(socket, false);
                 if (p2pEndPoint == null)
                 {
                     socket.Close();
