@@ -15,7 +15,6 @@ namespace p2pcopy
     {
         private static int defaultTaskCount = 10;
         private static readonly List<Socket> sockets = new List<Socket>();
-        private static readonly List<int> seconds = new List<int> { 10, 20, 30, 40, 50, 60 };
 
         static async Task Main(string[] args)
         {
@@ -480,6 +479,8 @@ namespace p2pcopy
 
         static int SleepTime(DateTime now)
         {
+            List<int> seconds = new List<int>() { 10, 20, 30, 40, 50, 60 };
+
             int next = seconds.Find(x => x > now.Second);
 
             return next - now.Second;
@@ -494,7 +495,7 @@ namespace p2pcopy
 
             UdtSocket udtSocket;
             CancellationTokenSource cts;
-            var retry = 1;
+            var retry = 0;
 
             do
             {
