@@ -55,26 +55,18 @@ namespace p2pcopy
                 InitializeSockets();
 
                 Console.WriteLine();
+                Console.WriteLine();
 
-                Console.Write("Enter the ip of your peer: ");
-                var remoteIp = Console.ReadLine();
+                Console.Write("Enter the ip:port,port,..,port of your peer: ");
+                string peer = Console.ReadLine();
 
-                if (string.IsNullOrEmpty(remoteIp))
+                if (string.IsNullOrEmpty(peer))
                 {
-                    Console.WriteLine("Invalid ip entered");
+                    Console.WriteLine("Invalid ip:port entered");
                     return;
                 }
 
-                Console.Write("Enter the ports of your peer (comma separate): ");
-                var peerPorts = Console.ReadLine();
-
-                if (string.IsNullOrEmpty(peerPorts))
-                {
-                    Console.WriteLine("Invalid ports entered");
-                    return;
-                }
-
-                var remotePorts = ParseRemotePort(peerPorts);
+                ParseRemoteAddr(peer, out var remoteIp, out var remotePorts);
 
                 UdtSocket connection = await PeerConnectAsync(remoteIp, remotePorts);
 
@@ -167,15 +159,17 @@ namespace p2pcopy
             }
         }
 
-        static int[] ParseRemotePort(string portsStr)
+        static void ParseRemoteAddr(string addr, out string remoteIp, out int[] ports)
         {
-            var split = portsStr.Split(',');
-            var ports = new int[split.Length];
+            string[] split = addr.Split(':');
 
-            for (var i = 0; i < split.Length; i++)
-                ports[i] = int.Parse(split[i]);
+            remoteIp = split[0];
 
-            return ports;
+            var array = split[1].Split(',');
+            ports = new int[array.Length];
+
+            for (var i = 0; i < array.Length; i++)
+                ports[i] = int.Parse(array[i]);
         }
 
         class P2pEndPoint
@@ -518,7 +512,7 @@ namespace p2pcopy
 
                 await Task.Delay(TimeSpan.FromSeconds(sleepTimeToSync), cts.Token);
 
-                Console.WriteLine("Connecting to other peer, please wait... ");
+                Console.WriteLine("Please wait... ");
                 udtSocket = await (await Task.WhenAny(taskList));
             } while (udtSocket == null);
 
@@ -560,47 +554,41 @@ namespace p2pcopy
 
         static void InitializeSockets()
         {
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Bind(new IPEndPoint(IPAddress.Any, 0));
-
-            // Connecting to external to obtain IP and get firewall type
-            var p2pEndPoint = GetExternalEndPoint(socket);
-            if (p2pEndPoint == null)
-            {
-                socket.Close();
-                return;
-            }
-
-            Console.WriteLine();
-            Console.WriteLine("Tell your peer your IP is: {0}", p2pEndPoint.External.Address);
-            Console.WriteLine("Initializing sockets...");
-
-            var ports = new StringBuilder();
+            var strBuilder = new StringBuilder();
+            var ip = string.Empty;
 
             for (var i = 0; i < defaultTaskCount; i++)
             {
-                socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
 
-                p2pEndPoint = GetExternalEndPoint(socket);
+                var p2pEndPoint = GetExternalEndPoint(socket);
                 if (p2pEndPoint == null)
                 {
                     socket.Close();
                     continue;
                 }
 
-                ports.Append(p2pEndPoint.External.Port);
-                ports.Append(",");
+                if (ip == string.Empty)
+                {
+                    ip = p2pEndPoint.External.Address.ToString();
+                    strBuilder.Append(ip);
+                    strBuilder.Append(":");
+                }
+
+                strBuilder.Append(p2pEndPoint.External.Port);
+                strBuilder.Append(",");
 
                 sockets.Add(socket);
             }
 
-            if (ports.Length <= 0)
+            if (strBuilder.Length <= 0)
                 return;
 
-            ports.Remove(ports.Length - 1, 1);
-            
-            Console.WriteLine("Tell your peer your ports are: {0}", ports);
+            strBuilder.Remove(strBuilder.Length - 1, 1);
+
+            Console.WriteLine();
+            Console.WriteLine("Tell this to your peer: {0}", strBuilder);
         }
     }
 }
