@@ -11,8 +11,9 @@ using UdtSharp;
 
 namespace p2pcopy
 {
-    internal class Program
+    class Program
     {
+        private static int _defaultTaskCount = 10;
         private static readonly List<Socket> Sockets = new List<Socket>();
         private static readonly List<int> Seconds = new List<int> { 10, 20, 30, 40, 50, 60 };
 
@@ -106,7 +107,7 @@ namespace p2pcopy
             }
         }
 
-        private class CommandLineArguments
+        class CommandLineArguments
         {
             internal bool Sender = false;
 
@@ -577,7 +578,7 @@ namespace p2pcopy
 
             var ports = new StringBuilder();
 
-            for (var i = 0; i < 10; i++)
+            for (var i = 0; i < _defaultTaskCount; i++)
             {
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
