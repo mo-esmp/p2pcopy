@@ -536,8 +536,6 @@ namespace p2pcopy
             {
                 try
                 {
-                    GetExternalEndPoint(socket);
-
                     var client = new UdtSocket(socket.AddressFamily, socket.SocketType);
                     client.Bind(socket);
 
