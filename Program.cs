@@ -184,7 +184,7 @@ namespace p2pcopy
             internal IPEndPoint Internal;
         }
 
-        static P2pEndPoint GetExternalEndPoint(Socket socket, bool printMessages = true)
+        static P2pEndPoint GetExternalEndPoint(Socket socket)
         {
             // https://gist.github.com/zziuni/3741933
 
@@ -456,8 +456,7 @@ namespace p2pcopy
             stunServers.Add(new Tuple<string, int>("stun4.l.google.com", 19302));
             stunServers.Add(new Tuple<string, int>("stunserver.org", 3478));
 
-            if (printMessages)
-                Console.WriteLine("Contacting STUN servers to obtain your IP");
+            Console.WriteLine("Contacting STUN servers to obtain your IP");
 
             foreach (Tuple<string, int> server in stunServers)
             {
@@ -471,8 +470,7 @@ namespace p2pcopy
                     continue;
                 }
 
-                if (printMessages)
-                    Console.WriteLine("Your firewall is {0}", externalEndPoint.NetType.ToString());
+                Console.WriteLine("Your firewall is {0}", externalEndPoint.NetType.ToString());
 
                 return new P2pEndPoint()
                 {
@@ -480,9 +478,8 @@ namespace p2pcopy
                     Internal = (socket.LocalEndPoint as IPEndPoint)
                 };
             }
-
-            if (printMessages)
-                Console.WriteLine("Could not find a working STUN server");
+            
+            Console.WriteLine("Could not find a working STUN server");
 
             return null;
         }
@@ -585,7 +582,7 @@ namespace p2pcopy
                 socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
 
-                p2pEndPoint = GetExternalEndPoint(socket, false);
+                p2pEndPoint = GetExternalEndPoint(socket);
                 if (p2pEndPoint == null)
                 {
                     socket.Close();
