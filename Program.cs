@@ -492,38 +492,44 @@ namespace p2pcopy
                 return null;
 
             Console.WriteLine("Trying to connect to peer on different ports");
+
             var retry = 0;
+            var isConnected = false;
+            Task<UdtSocket> socketTask = null;
 
-            var cts = new CancellationTokenSource();
-
-            var taskList = remotePorts.Select((port, index) => ConnectAsync(sockets[index], remoteAddress, port, cts.Token)).ToList();
-            Task<UdtSocket> socketTask;
-
-            var now = InternetTime.Get();
-            var sleepTimeToSync = SleepTime(now);
-
-            Console.WriteLine("[{0}] - Waiting {1} sec to sync with other peer", now.ToLongTimeString(), sleepTimeToSync);
-
-            await Task.Delay(TimeSpan.FromSeconds(sleepTimeToSync), cts.Token);
-
-            Console.WriteLine();
-            Console.WriteLine("Start connecting via sockets, please wait... ");
-
-            do
+            while (!isConnected)
             {
+                var now = InternetTime.Get();
+                var sleepTimeToSync = SleepTime(now);
+
+                Console.WriteLine();
                 Console.WriteLine($"Try {retry++}:");
+                Console.WriteLine("[{0}] - Waiting {1} sec to sync with other peer", now.ToLongTimeString(), sleepTimeToSync);
 
-                socketTask = await Task.WhenAny(taskList);
-                taskList.Remove(socketTask);
+                await Task.Delay(TimeSpan.FromSeconds(sleepTimeToSync));
+                
+                Console.WriteLine("Start connecting via sockets, please wait... ");
 
-                Console.WriteLine($"{defaultTaskCount - taskList.Count} sockets failed");
-            } while (socketTask.IsFaulted && taskList.Count > 0);
+                var cts = new CancellationTokenSource();
+                var taskList = remotePorts.Select((port, index) => ConnectAsync(sockets[index], remoteAddress, port, cts.Token)).ToList();
 
-            cts.Cancel();
+                do
+                { 
+                    socketTask = await Task.WhenAny(taskList);
+                    taskList.Remove(socketTask);
+
+                    Console.WriteLine($"{defaultTaskCount - taskList.Count} sockets failed");
+                } while (socketTask.IsFaulted && taskList.Count > 0);
+
+                if (socketTask.IsFaulted) continue;
+
+                cts.Cancel();
+                isConnected = true;
+            }
 
             Console.WriteLine();
 
-            return socketTask.IsFaulted ? null : await socketTask;
+            return await socketTask;
         }
 
         static async Task<UdtSocket> ConnectAsync(Socket socket, string remoteAddress, int remotePort, CancellationToken ct)
