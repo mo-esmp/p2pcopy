@@ -54,7 +54,6 @@ namespace p2pcopy
                 InitializeSockets();
 
                 Console.WriteLine();
-                Console.WriteLine();
 
                 Console.Write("Enter the ip:port,port,..,port of your peer: ");
                 string peer = Console.ReadLine();
@@ -518,7 +517,7 @@ namespace p2pcopy
                     socketTask = await Task.WhenAny(taskList);
                     taskList.Remove(socketTask);
 
-                    Console.WriteLine($"{defaultTaskCount - taskList.Count} sockets failed");
+                    Console.WriteLine($"socket {defaultTaskCount - taskList.Count} failed");
                 } while (socketTask.IsFaulted && taskList.Count > 0);
 
                 if (socketTask.IsFaulted) continue;
@@ -565,36 +564,36 @@ namespace p2pcopy
 
         static void InitializeSockets()
         {
+            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            
+            var p2pEndPoint = GetExternalEndPoint(socket);
+            if (p2pEndPoint == null)
+            {
+                socket.Close();
+                return;
+            }
+
+            sockets.Add(socket);
+
             var strBuilder = new StringBuilder();
-            var ip = string.Empty;
+            strBuilder.Append(p2pEndPoint.External.Address);
+            strBuilder.Append(":");
+
+            var endpoint = socket.LocalEndPoint.ToString().Split(':')[1];
+            strBuilder.Append(endpoint);
+            strBuilder.Append(",");
 
             for (var i = 0; i < defaultTaskCount; i++)
             {
-                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
                 socket.Bind(new IPEndPoint(IPAddress.Any, 0));
-
-                var p2pEndPoint = GetExternalEndPoint(socket);
-                if (p2pEndPoint == null)
-                {
-                    socket.Close();
-                    continue;
-                }
-
-                if (ip == string.Empty)
-                {
-                    ip = p2pEndPoint.External.Address.ToString();
-                    strBuilder.Append(ip);
-                    strBuilder.Append(":");
-                }
-
-                strBuilder.Append(p2pEndPoint.External.Port);
-                strBuilder.Append(",");
-
                 sockets.Add(socket);
-            }
 
-            if (strBuilder.Length <= 0)
-                return;
+                endpoint = socket.LocalEndPoint.ToString().Split(':')[1];
+                strBuilder.Append(endpoint);
+                strBuilder.Append(",");
+            }
 
             strBuilder.Remove(strBuilder.Length - 1, 1);
 
